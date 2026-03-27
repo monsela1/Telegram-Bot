@@ -1,4 +1,6 @@
 pyTelegramBotAPI
 Flask
+requests
 qrcode
-bakong-khqr
+pillow
+bakong-khqr[image]
