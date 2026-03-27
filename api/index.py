@@ -8,22 +8,19 @@ import io
 import qrcode
 from datetime import datetime, timedelta
 
-# ទាញយក Library របស់បាគង
 try:
     from bakong_khqr.khqr import KHQR
 except ImportError:
     KHQR = None
-    print("មិនមាន Library bakong_khqr ទេ។ សូមឆែក requirements.txt")
 
 # ==========================================
-# ⚙️ ការកំណត់ទូទៅ (Configurations via Vercel ENV)
+# ⚙️ ការកំណត់ទូទៅ 
 # ==========================================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip() # .strip() ការពារការដកឃ្លាដោយអចេតនា
-ADMIN_ID = os.getenv("ADMIN_ID", "1248955830")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+ADMIN_ID = os.getenv("ADMIN_ID", "1248955830").strip() # ត្រូវប្រាកដថាលេខ ID បងត្រឹមត្រូវក្នុង Vercel
 SECRET_SALT = os.getenv("SECRET_SALT", "MSL_FARM_SUPER_SECRET")
 MY_BAKONG_TOKEN = os.getenv("MY_BAKONG_TOKEN", "").strip()
 
-# threaded=False គឺដាច់ខាតត្រូវតែមានសម្រាប់ Vercel Serverless
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
 
@@ -32,9 +29,7 @@ if MY_BAKONG_TOKEN and KHQR:
 else:
     khqr = None
 
-# ==========================================
-# 🛡️ ប្រព័ន្ធ Database បណ្តោះអាសន្ន
-# ==========================================
+# Database បណ្តោះអាសន្ន
 used_transactions = set()
 pending_activations = {}
 
@@ -54,9 +49,6 @@ def generate_license_key(hwid, days):
     final_key = f"{hash_str[:4]}-{hash_str[4:8]}-{hash_str[8:12]}-{exp_str}"
     return final_key, exp_date.strftime("%d-%m-%Y")
 
-# ==========================================
-# ផ្ទាំង MAIN MENU
-# ==========================================
 def main_menu():
     markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
@@ -68,7 +60,7 @@ def main_menu():
     return markup
 
 # ==========================================
-# BOT HANDLERS (តួនាទីរបស់ Bot)
+# BOT HANDLERS
 # ==========================================
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -108,7 +100,6 @@ def handle_text(message):
         bot.send_message(message.chat.id, "មុខងារនេះតម្រូវឱ្យទាក់ទង Admin ផ្ទាល់។")
         
     else:
-        # ពិនិត្យមើលថាគាត់កំពុងរង់ចាំដាក់ HWID ឬអត់
         if chat_id in pending_activations and pending_activations[chat_id].get("step") == "waiting_hwid":
             hwid = text.upper()
             days = pending_activations[chat_id]["days"]
@@ -116,13 +107,12 @@ def handle_text(message):
             msg_wait = bot.send_message(message.chat.id, "⏳ កំពុង Generate License Key សូមរង់ចាំ...")
             try:
                 key, expire_date = generate_license_key(hwid, days)
-                del pending_activations[chat_id] # លុបចោលវិញពេលធ្វើរួច
+                del pending_activations[chat_id] 
                 
                 bot.delete_message(message.chat.id, msg_wait.message_id)
                 success_text = f"🎉 **សូមអបអរសាទរ!**\n\n🔑 **License Key របស់អ្នកគឺ:**\n`{key}`\n\n⏳ **ផុតកំណត់នៅ:** {expire_date}\n\n👉 សូម Copy Key នេះយកទៅដាក់ក្នុងកម្មវិធីរបស់អ្នក។"
                 bot.send_message(message.chat.id, success_text, parse_mode="Markdown")
-                
-                bot.send_message(ADMIN_ID, f"✅ ប្រព័ន្ធ Auto បាន Generate Key ឱ្យ @{message.from_user.username} រួចរាល់! ({days} ថ្ងៃ)")
+                bot.send_message(ADMIN_ID, f"✅ បាន Generate Key ឱ្យ @{message.from_user.username} រួចរាល់! ({days} ថ្ងៃ)")
             except Exception as e:
                 bot.send_message(message.chat.id, f"⚠️ មានបញ្ហាពេលបង្កើត Key: {e}")
 
@@ -136,7 +126,6 @@ def handle_buy_callback(call):
 
     if khqr:
         try:
-            # បងអាចកែឈ្មោះគណនី និងឈ្មោះហាងនៅទីនេះបាន
             qr_string = khqr.create_qr(
                 bank_account="monsela@aclb", 
                 merchant_name="MSL FARM",
@@ -157,7 +146,6 @@ def handle_buy_callback(call):
         return
 
     md5_hash = hashlib.md5(qr_string.encode('utf-8')).hexdigest()
-
     qr_img = qrcode.make(qr_string)
     bio = io.BytesIO()
     qr_img.save(bio, format="PNG")
@@ -166,58 +154,97 @@ def handle_buy_callback(call):
     invoice_text = f"🧾 **វិក្កយបត្រ (Invoice)**\n-------------------\n📦 **រយៈពេល:** 💎 {days} ថ្ងៃ\n💵 **តម្លៃ:** {price}$\n\n📲 **សូម Scan QR ខាងក្រោមដើម្បីបង់ប្រាក់**\n⚠️ *បញ្ជាក់:* បន្ទាប់ពីបង់រួច សូមចុចប៊ូតុង **'✅ ខ្ញុំបានបង់ហើយ'** ខាងក្រោម។"
 
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("✅ ខ្ញុំបានបង់ហើយ", callback_data=f"chk_{md5_hash}_{days}"))
+    # បញ្ជូនព័ត៌មានតម្លៃ និងចំនួនថ្ងៃទៅកាន់ callback បន្ត
+    markup.add(InlineKeyboardButton("✅ ខ្ញុំបានបង់ហើយ", callback_data=f"chk_{md5_hash}_{days}_{price}"))
 
-    try:
-        bot.send_photo(call.message.chat.id, photo=bio, caption=invoice_text, reply_markup=markup, parse_mode="Markdown")
-    except Exception as e:
-        bot.send_message(call.message.chat.id, f"❌ មានបញ្ហា: {e}")
+    bot.send_photo(call.message.chat.id, photo=bio, caption=invoice_text, reply_markup=markup, parse_mode="Markdown")
 
+
+# ==========================================
+# 🛡️ ផ្នែក Semi-Auto (អតិថិជនចុចថាបង់រួច ហើយបាញ់សារទៅ Admin)
+# ==========================================
 @bot.callback_query_handler(func=lambda call: call.data.startswith('chk_'))
 def check_payment(call):
     data_parts = call.data.split('_')
     md5_hash = data_parts[1]
-    days = int(data_parts[2])
+    days = data_parts[2]
+    price = data_parts[3]
+    user_id = str(call.message.chat.id)
+    username = call.from_user.username or call.from_user.first_name
 
     if md5_hash in used_transactions:
-        bot.answer_callback_query(call.id, "វិក្កយបត្រនេះត្រូវបានប្រើប្រាស់រួចហើយ!", show_alert=True)
+        bot.answer_callback_query(call.id, "វិក្កយបត្រនេះត្រូវបានចាត់ការរួចហើយ!", show_alert=True)
+        return
+    used_transactions.add(md5_hash)
+
+    # លុបប៊ូតុងចោលកុំឱ្យភ្ញៀវចុចផ្ទួនៗ
+    try:
+        bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+    except: pass
+
+    # លោតសារប្រាប់ភ្ញៀវឱ្យរង់ចាំ
+    bot.send_message(
+        call.message.chat.id,
+        "⏳ **សូមរង់ចាំបន្តិច!**\n\nប្រព័ន្ធកំពុងរង់ចាំ Admin ពិនិត្យផ្ទៀងផ្ទាត់ប្រាក់ក្នុងកុងបាគង។\n(ជាទូទៅចំណាយពេល 1-5 នាទី)",
+        parse_mode="Markdown"
+    )
+    
+    # បាញ់សាររោទ៍ទៅកាន់ Admin 
+    admin_text = f"🔔 **មានភ្ញៀវទើបតែទិញកញ្ចប់ថ្មី!**\n👤 ឈ្មោះ: @{username}\n🆔 អត្តសញ្ញាណ: `{user_id}`\n📦 កញ្ចប់: **{days} ថ្ងៃ**\n💵 តម្លៃ: **{price}$**\n\n👉 មេ! សូមចូលទៅឆែកមើល App បាគង បើឃើញលុយចូលមែន សូមចុច [✅ Approve]!"
+    markup = InlineKeyboardMarkup()
+    # បង្កប់ user_id និង days ទៅក្នុងប៊ូតុង Approve ដើម្បីងាយស្រួលធ្វើការងារបន្ត
+    markup.add(
+        InlineKeyboardButton("✅ ទទួលស្គាល់ (Approve)", callback_data=f"appr_{user_id}_{days}"),
+        InlineKeyboardButton("❌ បដិសេធ (Reject)", callback_data=f"rej_{user_id}")
+    )
+    try:
+        bot.send_message(ADMIN_ID, admin_text, reply_markup=markup, parse_mode="Markdown")
+    except Exception as e:
+        bot.send_message(call.message.chat.id, "⚠️ មិនអាចទាក់ទង Admin បានទេ។ សូមឆាតទៅ Admin ផ្ទាល់។")
+
+# ==========================================
+# 👑 មុខងារផ្តាច់មុខសម្រាប់ Admin ចុច Approve / Reject
+# ==========================================
+@bot.callback_query_handler(func=lambda call: call.data.startswith('appr_') or call.data.startswith('rej_'))
+def admin_action(call):
+    if str(call.message.chat.id) != str(ADMIN_ID):
+        bot.answer_callback_query(call.id, "⚠️ អ្នកមិនមែនជា Admin ទេ!", show_alert=True)
         return
 
-    bot.answer_callback_query(call.id, "⏳ កំពុងឆែកមើលប្រវត្តិបង់ប្រាក់ពីបាគងអូតូ...")
-    
+    data = call.data.split('_')
+    action = data[0]
+    user_id = data[1]
+
+    # លុបប៊ូតុងចេញពីសារ Admin
     try:
-        # ⚠️ នេះគឺជាកូដដែលកែថ្មី ឆែកលុយពិតប្រាកដពីបាគង ⚠️
-        if khqr:
-            status = khqr.check_payment(md5_hash)
-        else:
-            status = False
+        bot.edit_message_reply_markup(ADMIN_ID, call.message.message_id, reply_markup=None)
+    except: pass
+
+    if action == "appr":
+        days = int(data[2])
+        # ចាប់ផ្តើមវគ្គសួររក HWID ពីភ្ញៀវ
+        pending_activations[user_id] = {"days": days, "step": "waiting_hwid"}
         
-        if status:
-            used_transactions.add(md5_hash)
-
-            try:
-                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
-            except: pass
-
-            chat_id = str(call.message.chat.id)
-            pending_activations[chat_id] = {"days": days, "step": "waiting_hwid"}
-
-            bot.send_message(
-                call.message.chat.id,
-                f"✅ **ការបង់ប្រាក់ជោគជ័យ!**\n\n👉 **សូម Copy Device ID (HWID)** ពីក្នុងកម្មវិធីរបស់អ្នក រួច Paste ចូលមកក្នុងឆាតនេះ ដើម្បីទទួលបាន Key:",
-                parse_mode="Markdown"
-            )
-        else:
-            bot.send_message(call.message.chat.id, "❌ **រកមិនទាន់ឃើញប្រាក់ចូលទេ!**\nសូមរង់ចាំបន្តិចរួចចុចម្តងទៀត។")
-            
-    except Exception as e:
-        bot.send_message(call.message.chat.id, f"⚠️ Error ភ្ជាប់ទៅបាគង: {e}")
+        bot.send_message(ADMIN_ID, f"✅ បាន Approve ឱ្យ User ID: {user_id} រួចរាល់។")
+        
+        # បាញ់សារទៅភ្ញៀវថា Approve ហើយ
+        bot.send_message(
+            int(user_id),
+            "✅ **ការបង់ប្រាក់ត្រូវបានទទួលស្គាល់! (Approved)**\n\n👉 **សូម Copy Device ID (HWID)** ពីក្នុងកម្មវិធីរបស់អ្នក រួច Paste ចូលមកក្នុងឆាតនេះ ដើម្បីទទួលបាន Key:",
+            parse_mode="Markdown"
+        )
+    elif action == "rej":
+        bot.send_message(ADMIN_ID, f"❌ បាន Reject User ID: {user_id} រួចរាល់។")
+        bot.send_message(
+            int(user_id),
+            "❌ **ការបង់ប្រាក់របស់អ្នកត្រូវបានបដិសេធ (Rejected) ដោយ Admin!**\n\nប្រសិនបើមានចម្ងល់ ឬមានការភាន់ច្រឡំ សូមទាក់ទងមកកាន់ @Mon_Sela",
+            parse_mode="Markdown"
+        )
 
 
 # ==========================================
 # 🌐 FLASK WEBHOOK ROUTES សម្រាប់ VERCEL 
 # ==========================================
-
 @app.route('/', methods=['POST', 'GET'])
 def index_route():
     if request.method == 'POST':
@@ -227,10 +254,9 @@ def index_route():
             bot.process_new_updates([update])
             return "OK", 200
         except Exception as e:
-            print(f"Error: {e}")
             return "Server Error", 500
     else:
-        return "✅ MSL Bot កំពុងដំណើរការយ៉ាងរលូននៅលើ Vercel! (GET Success)", 200
+        return "✅ MSL Semi-Auto Bot កំពុងដំណើរការយ៉ាងរលូននៅលើ Vercel!", 200
 
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
 def webhook_token():
