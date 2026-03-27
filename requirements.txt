@@ -1,5 +1,5 @@
 pyTelegramBotAPI==4.14.0
 Flask==3.0.0
 qrcode==7.4.2
-bakong-khqr==1.0.3
+bakong-khqr==0.5.1
 requests==2.31.0
