@@ -8,7 +8,7 @@ import io
 import qrcode
 from datetime import datetime, timedelta
 
-# សាកល្បងទាញយក Library របស់បាគង (បើ Error វានឹងមិនគាំង Server ទេ)
+# ទាញយក Library របស់បាគង
 try:
     from bakong_khqr.khqr import KHQR
 except ImportError:
@@ -18,10 +18,10 @@ except ImportError:
 # ==========================================
 # ⚙️ ការកំណត់ទូទៅ (Configurations via Vercel ENV)
 # ==========================================
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip() # .strip() ការពារការដកឃ្លាដោយអចេតនា
 ADMIN_ID = os.getenv("ADMIN_ID", "1248955830")
 SECRET_SALT = os.getenv("SECRET_SALT", "MSL_FARM_SUPER_SECRET")
-MY_BAKONG_TOKEN = os.getenv("MY_BAKONG_TOKEN")
+MY_BAKONG_TOKEN = os.getenv("MY_BAKONG_TOKEN", "").strip()
 
 # threaded=False គឺដាច់ខាតត្រូវតែមានសម្រាប់ Vercel Serverless
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
@@ -136,6 +136,7 @@ def handle_buy_callback(call):
 
     if khqr:
         try:
+            # បងអាចកែឈ្មោះគណនី និងឈ្មោះហាងនៅទីនេះបាន
             qr_string = khqr.create_qr(
                 bank_account="monsela@aclb", 
                 merchant_name="MSL FARM",
@@ -152,8 +153,8 @@ def handle_buy_callback(call):
             bot.send_message(call.message.chat.id, f"❌ Error generating QR: {e}")
             return
     else:
-        # បម្រុងទុកក្រែងលោការទាញយកបាគងមានបញ្ហា
-        qr_string = f"TEST_QR_{price}"
+        bot.send_message(call.message.chat.id, "❌ ប្រព័ន្ធបាគងកំពុងមានបញ្ហា សូមទាក់ទង Admin។")
+        return
 
     md5_hash = hashlib.md5(qr_string.encode('utf-8')).hexdigest()
 
@@ -185,8 +186,11 @@ def check_payment(call):
     bot.answer_callback_query(call.id, "⏳ កំពុងឆែកមើលប្រវត្តិបង់ប្រាក់ពីបាគងអូតូ...")
     
     try:
-        # កន្លែងនេះបងត្រូវដាក់កូដឆែកបាគងពិតប្រាកដ។ ខ្ញុំដាក់ True សិនដើម្បីឱ្យកូដរត់បាន។
-        status = True # ឧទាហរណ៍: khqr.check_payment(md5_hash) 
+        # ⚠️ នេះគឺជាកូដដែលកែថ្មី ឆែកលុយពិតប្រាកដពីបាគង ⚠️
+        if khqr:
+            status = khqr.check_payment(md5_hash)
+        else:
+            status = False
         
         if status:
             used_transactions.add(md5_hash)
@@ -207,14 +211,13 @@ def check_payment(call):
             bot.send_message(call.message.chat.id, "❌ **រកមិនទាន់ឃើញប្រាក់ចូលទេ!**\nសូមរង់ចាំបន្តិចរួចចុចម្តងទៀត។")
             
     except Exception as e:
-        bot.send_message(call.message.chat.id, f"⚠️ Error: {e}")
+        bot.send_message(call.message.chat.id, f"⚠️ Error ភ្ជាប់ទៅបាគង: {e}")
 
 
 # ==========================================
-# 🌐 FLASK WEBHOOK ROUTES សម្រាប់ VERCEL (កែសម្រួលត្រូវស្តង់ដារ)
+# 🌐 FLASK WEBHOOK ROUTES សម្រាប់ VERCEL 
 # ==========================================
 
-# ទទួលសារពេល Telegram បាញ់មកកាន់ Root (/)
 @app.route('/', methods=['POST', 'GET'])
 def index_route():
     if request.method == 'POST':
@@ -229,7 +232,6 @@ def index_route():
     else:
         return "✅ MSL Bot កំពុងដំណើរការយ៉ាងរលូននៅលើ Vercel! (GET Success)", 200
 
-# ផ្លូវបំរុង ពេល Telegram បាញ់មកកាន់ /TOKEN
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
 def webhook_token():
     try:
